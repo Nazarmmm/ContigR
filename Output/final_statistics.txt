@@ -1,9 +1,0 @@
-Final Statistics
-================
-
-Average execution times:
-  Contig Collection: 1587 ms
-  Overlap Detection: 154005 ms
-  Multiplicity Assignment: 31 ms
-  File Writing: 107208 ms
-  Total Time: 262834 ms
