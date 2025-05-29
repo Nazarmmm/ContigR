@@ -1,0 +1,11 @@
+Input file: `C:/Users/admin/Downloads/testg.fasta`
+
+ === Summary ===
+5000 contigs were processed.
+Sum of contig lengths: 38491302 bp
+Expected length of the genome: 253036978 bp
+Min coverage: 0.000000
+Max coverage: 0.000000
+Mean coverage: 0.000000
+Median coverage: 0.000000
+LQ-coefficient: 86.48
