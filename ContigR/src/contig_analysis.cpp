@@ -1,4 +1,8 @@
 #include <Rcpp.h>
+#include <filesystem>
+#include <fstream>
+#include <vector>
+#include <chrono>
 #include "contigs.hpp"
 #include "overlaps.hpp"
 #include "assign_multiplicity.hpp"
@@ -8,142 +12,119 @@ using namespace Rcpp;
 
 // [[Rcpp::export]]
 List analyze_contigs_cpp(std::string filepath, int maxk, int mink, 
-                        std::string output_dir, int num_iterations) {
-    // Create output directory if it doesn't exist
+                         std::string output_dir, int num_iterations) {
+
     std::filesystem::path output_path(output_dir);
     if (!std::filesystem::exists(output_path)) {
         std::filesystem::create_directory(output_path);
     }
-    
-    // Create CSV file for execution times
+
     std::ofstream csv_file(output_path / "execution_times.csv");
     csv_file << "Iteration,Contig Collection (ms),Overlap Detection (ms),"
              << "Multiplicity Assignment (ms),File Writing (ms),Total Time (ms)\n";
-    
-    std::vector<ExecutionTimes> all_execution_times;
-    
-    for(int iteration = 0; iteration < num_iterations; ++iteration) {
-        Rcout << "\nStarting iteration " << iteration + 1 << " of " 
-              << num_iterations << std::endl;
-        
-        ExecutionTimes times;
+
+    std::vector<long> contig_collection_times;
+    std::vector<long> overlap_detection_times;
+    std::vector<long> multiplicity_assignment_times;
+    std::vector<long> file_writing_times;
+    std::vector<long> total_times;
+
+    for (int iteration = 0; iteration < num_iterations; ++iteration) {
+        Rcout << "\nStarting iteration " << iteration + 1 << " of " << num_iterations << std::endl;
+
         auto total_start_time = std::chrono::high_resolution_clock::now();
-        
-        // Get contig collection
+
+        // Contig Collection
         auto start_time = std::chrono::high_resolution_clock::now();
         ContigCollection contig_collection = get_contig_collection(filepath, maxk);
         auto end_time = std::chrono::high_resolution_clock::now();
-        times.contig_collection_time = std::chrono::duration_cast<std::chrono::milliseconds>
-            (end_time - start_time).count();
-        
-        // Detect overlaps
+        long contig_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+
+        // Overlap Detection
         start_time = std::chrono::high_resolution_clock::now();
         OverlapCollection overlap_collection = detect_adjacent_contigs(contig_collection, mink, maxk);
         end_time = std::chrono::high_resolution_clock::now();
-        times.overlap_detection_time = std::chrono::duration_cast<std::chrono::milliseconds>
-            (end_time - start_time).count();
-        
-        // Assign multiplicity
+        long overlap_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+
+        // Multiplicity Assignment
         start_time = std::chrono::high_resolution_clock::now();
         assign_multiplicity(contig_collection, overlap_collection);
         end_time = std::chrono::high_resolution_clock::now();
-        times.multiplicity_assignment_time = std::chrono::duration_cast<std::chrono::milliseconds>
-            (end_time - start_time).count();
-        
-        // Write output files
+        long multiplicity_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+
+        // File Writing
         start_time = std::chrono::high_resolution_clock::now();
-        std::filesystem::path iteration_dir = output_path / 
-            ("iteration_" + std::to_string(iteration + 1));
+        std::filesystem::path iteration_dir = output_path / ("iteration_" + std::to_string(iteration + 1));
         if (!std::filesystem::exists(iteration_dir)) {
             std::filesystem::create_directory(iteration_dir);
         }
         std::string outdpath = iteration_dir.string();
-        
+
         write_summary(contig_collection, overlap_collection, filepath, outdpath);
         write_adjacency_table_and_full_log(contig_collection, overlap_collection, outdpath);
         write_genbank(contig_collection, overlap_collection, outdpath);
         end_time = std::chrono::high_resolution_clock::now();
-        times.file_writing_time = std::chrono::duration_cast<std::chrono::milliseconds>
-            (end_time - start_time).count();
-        
-        // Calculate total time
+        long file_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+
+        // Total time
         auto total_end_time = std::chrono::high_resolution_clock::now();
-        times.total_time = std::chrono::duration_cast<std::chrono::milliseconds>
-            (total_end_time - total_start_time).count();
-        
-        all_execution_times.push_back(times);
-        
-        // Write to CSV
-        csv_file << iteration + 1 << ","
-                << times.contig_collection_time << ","
-                << times.overlap_detection_time << ","
-                << times.multiplicity_assignment_time << ","
-                << times.file_writing_time << ","
-                << times.total_time << "\n";
-        
-        Rcout << "Iteration " << iteration + 1 << " execution times:" << std::endl;
-        Rcout << "  Contig Collection: " << times.contig_collection_time << " ms" << std::endl;
-        Rcout << "  Overlap Detection: " << times.overlap_detection_time << " ms" << std::endl;
-        Rcout << "  Multiplicity Assignment: " << times.multiplicity_assignment_time << " ms" << std::endl;
-        Rcout << "  File Writing: " << times.file_writing_time << " ms" << std::endl;
-        Rcout << "  Total Time: " << times.total_time << " ms" << std::endl;
+        long total_time = std::chrono::duration_cast<std::chrono::milliseconds>(total_end_time - total_start_time).count();
+
+        contig_collection_times.push_back(contig_time);
+        overlap_detection_times.push_back(overlap_time);
+        multiplicity_assignment_times.push_back(multiplicity_time);
+        file_writing_times.push_back(file_time);
+        total_times.push_back(total_time);
+
+        csv_file << iteration + 1 << "," << contig_time << "," << overlap_time << ","
+                 << multiplicity_time << "," << file_time << "," << total_time << "\n";
+
+        Rcout << "Iteration " << iteration + 1 << " execution times:\n"
+              << "  Contig Collection: " << contig_time << " ms\n"
+              << "  Overlap Detection: " << overlap_time << " ms\n"
+              << "  Multiplicity Assignment: " << multiplicity_time << " ms\n"
+              << "  File Writing: " << file_time << " ms\n"
+              << "  Total Time: " << total_time << " ms\n";
     }
-    
+
     // Calculate averages
-    ExecutionTimes avg_times = {0, 0, 0, 0, 0};
-    for(const auto& times : all_execution_times) {
-        avg_times.contig_collection_time += times.contig_collection_time;
-        avg_times.overlap_detection_time += times.overlap_detection_time;
-        avg_times.multiplicity_assignment_time += times.multiplicity_assignment_time;
-        avg_times.file_writing_time += times.file_writing_time;
-        avg_times.total_time += times.total_time;
-    }
-    
-    avg_times.contig_collection_time /= num_iterations;
-    avg_times.overlap_detection_time /= num_iterations;
-    avg_times.multiplicity_assignment_time /= num_iterations;
-    avg_times.file_writing_time /= num_iterations;
-    avg_times.total_time /= num_iterations;
-    
-    // Write averages to CSV
-    csv_file << "\nAverage,"
-            << avg_times.contig_collection_time << ","
-            << avg_times.overlap_detection_time << ","
-            << avg_times.multiplicity_assignment_time << ","
-            << avg_times.file_writing_time << ","
-            << avg_times.total_time << "\n";
-    
+    long avg_contig = std::accumulate(contig_collection_times.begin(), contig_collection_times.end(), 0L) / num_iterations;
+    long avg_overlap = std::accumulate(overlap_detection_times.begin(), overlap_detection_times.end(), 0L) / num_iterations;
+    long avg_multiplicity = std::accumulate(multiplicity_assignment_times.begin(), multiplicity_assignment_times.end(), 0L) / num_iterations;
+    long avg_file = std::accumulate(file_writing_times.begin(), file_writing_times.end(), 0L) / num_iterations;
+    long avg_total = std::accumulate(total_times.begin(), total_times.end(), 0L) / num_iterations;
+
+    csv_file << "\nAverage," << avg_contig << "," << avg_overlap << ","
+             << avg_multiplicity << "," << avg_file << "," << avg_total << "\n";
+
     csv_file.close();
-    
-    // Write final statistics
+
     std::ofstream stats_file(output_path / "final_statistics.txt");
-    stats_file << "Final Statistics\n";
-    stats_file << "================\n\n";
-    stats_file << "Average execution times:\n";
-    stats_file << "  Contig Collection: " << avg_times.contig_collection_time << " ms\n";
-    stats_file << "  Overlap Detection: " << avg_times.overlap_detection_time << " ms\n";
-    stats_file << "  Multiplicity Assignment: " << avg_times.multiplicity_assignment_time << " ms\n";
-    stats_file << "  File Writing: " << avg_times.file_writing_time << " ms\n";
-    stats_file << "  Total Time: " << avg_times.total_time << " ms\n";
+    stats_file << "Final Statistics\n================\n\n"
+               << "Average execution times:\n"
+               << "  Contig Collection: " << avg_contig << " ms\n"
+               << "  Overlap Detection: " << avg_overlap << " ms\n"
+               << "  Multiplicity Assignment: " << avg_multiplicity << " ms\n"
+               << "  File Writing: " << avg_file << " ms\n"
+               << "  Total Time: " << avg_total << " ms\n";
     stats_file.close();
-    
-    // Return results as a list
+
     return List::create(
         Named("adjacency_table_path") = (output_path / "iteration_1__adjacent_contigs.tsv").string(),
         Named("execution_times") = DataFrame::create(
             Named("iteration") = seq_len(num_iterations),
-            Named("contig_collection") = sapply(all_execution_times, [](const ExecutionTimes& t) { return t.contig_collection_time; }),
-            Named("overlap_detection") = sapply(all_execution_times, [](const ExecutionTimes& t) { return t.overlap_detection_time; }),
-            Named("multiplicity_assignment") = sapply(all_execution_times, [](const ExecutionTimes& t) { return t.multiplicity_assignment_time; }),
-            Named("file_writing") = sapply(all_execution_times, [](const ExecutionTimes& t) { return t.file_writing_time; }),
-            Named("total_time") = sapply(all_execution_times, [](const ExecutionTimes& t) { return t.total_time; })
+            Named("contig_collection") = contig_collection_times,
+            Named("overlap_detection") = overlap_detection_times,
+            Named("multiplicity_assignment") = multiplicity_assignment_times,
+            Named("file_writing") = file_writing_times,
+            Named("total_time") = total_times
         ),
         Named("average_times") = List::create(
-            Named("contig_collection") = avg_times.contig_collection_time,
-            Named("overlap_detection") = avg_times.overlap_detection_time,
-            Named("multiplicity_assignment") = avg_times.multiplicity_assignment_time,
-            Named("file_writing") = avg_times.file_writing_time,
-            Named("total_time") = avg_times.total_time
+            Named("contig_collection") = avg_contig,
+            Named("overlap_detection") = avg_overlap,
+            Named("multiplicity_assignment") = avg_multiplicity,
+            Named("file_writing") = avg_file,
+            Named("total_time") = avg_total
         )
     );
-} 
+}

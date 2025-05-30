@@ -1,13 +1,19 @@
 #!/usr/bin/env Rscript
 
 # Load required libraries
-library(ContigR)
+# library(ContigR)
+
+cat('Jopa')
+
+Rcpp::sourceCpp("./src/contig_analysis.cpp")
 
 # Parse command line arguments
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args) < 1) {
   stop("Usage: Rscript run_analysis.R <input_fasta_file> [maxk] [mink] [output_dir] [num_iterations]")
 }
+
+cat('Jopa')
 
 # Set default values
 input_file <- args[1]
@@ -26,7 +32,7 @@ cat("  output directory:", output_dir, "\n")
 cat("  number of iterations:", num_iterations, "\n")
 
 # Run the analysis
-result <- analyze_contigs(
+result <- analyze_contigs_cpp(
   filepath = input_file,
   maxk = maxk,
   mink = mink,
